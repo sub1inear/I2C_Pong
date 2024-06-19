@@ -4,7 +4,6 @@
 Arduboy2 arduboy;
 
 // constants
-
 // can be set to anything (unless reserved)
 // must be 7 bits
 constexpr int8_t TARGET_ADDRESS = 0x10;
@@ -15,12 +14,11 @@ constexpr uint8_t PADDLE_HEIGHT = 16;
 constexpr uint8_t BALL_WIDTH = 4;
 constexpr uint8_t BALL_HEIGHT = 4;
 
-constexpr uint8_t FONT_WIDTH          = 5;
+constexpr uint8_t FONT_WIDTH = 5;
 // offset from center for the score text
-constexpr uint8_t SCORE_CENTER_OFFSET  = 5;
+constexpr uint8_t SCORE_CENTER_OFFSET = 5;
 
 // globals
-
 enum role_t : uint8_t {
     CONTROLLER,
     TARGET,
@@ -43,20 +41,28 @@ int8_t ball_dy = 0;
 
 role_t ball_start_side = CONTROLLER;
 
+// must be volatile because it is changed in the callback
+volatile bool handshake_completed = false;
+
 // target callbacks
 void data_recieve(int bytes) { // callback for when controller sends a message
-    while (Wire.available()) { // if there is somthing in the rx buffer
+    while (Wire.available()) {
         // update globals
         player_y[CONTROLLER] = Wire.read();
-        ball_x     = Wire.read();
-        ball_y     = Wire.read();
+        ball_x = Wire.read();
+        ball_y = Wire.read();
         player_score[CONTROLLER] = Wire.read();
-        player_score[TARGET]     = Wire.read();
+        player_score[TARGET]= Wire.read();
     }
 }
 void data_request() { // callback for when controller requests a message
     Wire.write(player_y[role]);
     Wire.write(arduboy.pressed(A_BUTTON));
+}
+
+void handshake_request() {
+    Wire.write(true);
+    handshake_completed = true;
 }
 
 // main functions
@@ -69,26 +75,29 @@ void setup() {
     // init I2C
     power_twi_enable();
     arduboy.clear();
+    
+    arduboy.print("Pong V1.1\nWaiting for other\nplayer...");
 
-    // start manual handshake
-    arduboy.print(F("Pong V1.0\nPress A to be\nthe controller.\nPress B to be\nthe target."));
     arduboy.display();
-    while (role == NONE) {
-        arduboy.pollButtons();
-        if (arduboy.justReleased(A_BUTTON)) {
-            // begin as controller
-            role = CONTROLLER;
-            Wire.begin();
-        }
-        if (arduboy.justReleased(B_BUTTON)) {
-            // begin as target
-            role = TARGET;
-            Wire.begin(TARGET_ADDRESS);
-            // setup callbacks
-            Wire.onRequest(data_request);
-            Wire.onReceive(data_recieve);
 
-        }
+    // start auto handshake
+    Wire.begin();
+    Wire.requestFrom(TARGET_ADDRESS, 1);
+    if (Wire.available()) { // already a target here
+        role = CONTROLLER;
+        handshake_completed = Wire.read();
+    } else {
+        role = TARGET;
+        Wire.begin(TARGET_ADDRESS);
+        Wire.onRequest(handshake_request);
+    }
+
+    while (!handshake_completed) {}
+    
+    // setup callbacks
+    if (role == TARGET) {
+        Wire.onRequest(data_request);
+        Wire.onReceive(data_recieve);
     }
 }
 
@@ -97,9 +106,7 @@ void loop() {
         return;
     }
     arduboy.clear();
-    
-    // not used but may be if anyone else expands this example
-    // arduboy.pollButtons();
+    arduboy.pollButtons();
 
     // update our y
     int8_t dy = (arduboy.pressed(DOWN_BUTTON) - arduboy.pressed(UP_BUTTON));
@@ -116,7 +123,7 @@ void loop() {
     if (role == CONTROLLER) {
         // get data
         Wire.requestFrom(TARGET_ADDRESS, 2);
-        if (Wire.available()) {
+        while (Wire.available()) {
             player_y[TARGET] = Wire.read();
             player_a_button[TARGET] = Wire.read();
         }
