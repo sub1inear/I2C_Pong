@@ -19,13 +19,13 @@ constexpr uint8_t FONT_WIDTH = 5;
 constexpr uint8_t SCORE_CENTER_OFFSET = 5;
 
 // globals
-enum role_t : uint8_t {
+enum Role : uint8_t {
     CONTROLLER,
     TARGET,
     NONE
 };
 
-role_t role = NONE;
+Role role = NONE;
 
 int8_t player_y[2] = {(HEIGHT - PADDLE_HEIGHT) / 2, (HEIGHT - PADDLE_HEIGHT) / 2};
 
@@ -39,13 +39,13 @@ int8_t ball_y = player_y[0] + (PADDLE_HEIGHT - BALL_HEIGHT) / 2;
 int8_t ball_dx = 0;
 int8_t ball_dy = 0;
 
-role_t ball_start_side = CONTROLLER;
+Role ball_start_side = CONTROLLER;
 
 // must be volatile because it is changed in the callback
 volatile bool handshake_completed = false;
 
 // target callbacks
-void data_recieve(int bytes) { // callback for when controller sends a message
+void data_receive(int bytes) { // callback for when controller sends a message
     while (Wire.available()) {
         // update globals
         player_y[CONTROLLER] = Wire.read();
@@ -97,7 +97,7 @@ void setup() {
     // setup callbacks
     if (role == TARGET) {
         Wire.onRequest(data_request);
-        Wire.onReceive(data_recieve);
+        Wire.onReceive(data_receive);
     }
 }
 
@@ -201,7 +201,7 @@ void loop() {
 
     arduboy.setCursor(WIDTH / 2 - FONT_WIDTH - SCORE_CENTER_OFFSET, 0);
     arduboy.print(player_score[CONTROLLER]);
-    arduboy.setCursor(WIDTH / 2 + FONT_WIDTH + SCORE_CENTER_OFFSET, 0);
+    arduboy.setCursor(WIDTH / 2 + SCORE_CENTER_OFFSET, 0);
     arduboy.print(player_score[TARGET]);
 
     arduboy.display();
